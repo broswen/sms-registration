@@ -21,6 +21,10 @@ provider:
   apiGateway:
     description: sms-registration
 
+  logs:
+    restApi:
+      format: '{"stage" : "$context.stage","request_id" : "$context.requestId","api_id" : "$context.apiId","resource_path" : "$context.resourcePath","resource_id" : "$context.resourceId","http_method" : "$context.httpMethod","source_ip" : "$context.identity.sourceIp","user-agent" : "$context.identity.userAgent","account_id" : "$context.identity.accountId","api_key" : "$context.identity.apiKey","caller" : "$context.identity.caller","user" : "$context.identity.user","user_arn" : "$context.identity.userArn"}'
+
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -46,6 +50,7 @@ package:
 functions:
   ping:
     handler: src/lambdas/ping.handler
+    reservedConcurrency: 2
     events:
       - http:
           method: GET
@@ -54,6 +59,7 @@ functions:
 # process SQS list of phone numbers and names, insert into dynamodb table (if not exist)
   submitRegistration:
     handler: src/lambdas/submit_registration.handler
+    reservedConcurrency: 5
     events:
       - sqs:
           arn: !GetAtt RegistrationQueue.Arn
@@ -63,6 +69,7 @@ functions:
 # watch table stream, generate confirmation code and send sns to provided phone number
   processRegistration:
     handler: src/lambdas/process_registration.handler
+    reservedConcurrency: 5
     events:
       - stream:
           type: dynamodb
@@ -71,6 +78,7 @@ functions:
 # check if code exists, update registration if not expired
   confirmRegistration:
     handler: src/lambdas/confirm_registration.handler
+    reservedConcurrency: 5
     events:
       - sqs:
           arn: !GetAtt ConfirmationQueue.Arn
