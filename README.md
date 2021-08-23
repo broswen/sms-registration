@@ -10,3 +10,7 @@
 2. Receive a confirmation code via SMS at the provided phone number.
 3. `GET /confirm?phonenumber=...&code=...` request with the phone number and confirmation code to confirm the registration.
 4. Registration and confirmation code will eventually expire and a new registration must be submitted.
+
+### TODO
+- [ ] API Gateway request validation
+- [ ] limit lambda concurrency
