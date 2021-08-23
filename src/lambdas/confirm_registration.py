@@ -16,8 +16,8 @@ def handler(event, context):
         confirmation_code = body['code']
         registration = utils.get_registration(phone_number)
 
-        if registration['Item']['code']['S']:
-            logger.inf("already confirmed", phone_number=phone_number)
+        if registration['Item']['confirmed']['BOOL']:
+            logger.info("already confirmed", phone_number=phone_number)
             continue
         if confirmation_code != registration['Item']['code']['S']:
             logger.info("confirmation code mismatch", phone_number=phone_number)

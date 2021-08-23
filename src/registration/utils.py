@@ -31,9 +31,10 @@ def confirm_registration(phone_number: str):
                 'S': phone_number
             }
         },
-        UpdateExpression="SET #c = :t",
+        UpdateExpression="SET #c = :t REMOVE #ttl",
         ExpressionAttributeNames={
-            '#c': 'confirmed'
+            '#c': 'confirmed',
+            '#ttl': 'ttl'
         },
         ExpressionAttributeValues={
             ':t': {
