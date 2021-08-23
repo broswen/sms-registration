@@ -1,0 +1,115 @@
+Resources:
+  RegistrationQueue:
+    Type: AWS::SQS::Queue
+
+  RegistrationDLQ:
+    Type: AWS::SQS::Queue
+
+  ConfirmationQueue:
+    Type: AWS::SQS::Queue
+
+  ConfirmationDLQ:
+    Type: AWS::SQS::Queue
+
+  RegistrationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: phonenumber
+          AttributeType: S
+      KeySchema:
+        - AttributeName: phonenumber
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  RegisterResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: register
+      RestApiId: !Ref ApiGatewayRestApi
+
+  RegisterMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref RegisterResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: '200'
+        - StatusCode: '400'
+        - StatusCode: '500'
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewaySqsRole.Arn
+        PassthroughBehavior: NEVER
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${RegistrationQueue}'
+          - { RegistrationQueue: !GetAtt RegistrationQueue.QueueName }
+        RequestParameters:
+          'integration.request.header.Content-Type': "'application/x-www-form-urlencoded'"
+        RequestTemplates:
+          'application/json': 'Action=SendMessage&MessageBody=$input.body'
+        IntegrationResponses:
+          - StatusCode: '200'
+
+  ConfirmResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: confirm
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ConfirmMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ConfirmResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: '200'
+        - StatusCode: '400'
+        - StatusCode: '500'
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewaySqsRole.Arn
+        PassthroughBehavior: NEVER
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${ConfirmationQueue}'
+          - { ConfirmationQueue: !GetAtt ConfirmationQueue.QueueName }
+        RequestParameters:
+          'integration.request.header.Content-Type': "'application/x-www-form-urlencoded'"
+        RequestTemplates:
+          'application/json': "Action=SendMessage&MessageBody={\"phonenumber\":\"$input.params('phonenumber')\",\"code\":\"$input.params('code')\"}"
+        IntegrationResponses:
+          - StatusCode: '200'
+
+  ApiGatewaySqsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource:
+                  - !GetAtt RegistrationQueue.Arn
+                  - !GetAtt ConfirmationQueue.Arn

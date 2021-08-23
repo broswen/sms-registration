@@ -1,0 +1,81 @@
+service: sms-registration
+frameworkVersion: '2'
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    usePipenv: true
+
+provider:
+  name: aws
+  runtime: python3.9
+  memorySize: 128
+  timeout: 3
+  lambdaHashingVersion: 20201221
+
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+
+  apiGateway:
+    description: sms-registration
+
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:GetItem
+      Resource:
+        - !GetAtt RegistrationTable.Arn
+    - Effect: Allow
+      Action:
+        - sns:Publish
+      Resource: '*'
+
+
+  environment:
+    REGTABLE: !Ref RegistrationTable
+
+package:
+  patterns:
+    - '!node_modules/**'
+    - '!.idea/**'
+
+functions:
+  ping:
+    handler: src/lambdas/ping.handler
+    events:
+      - http:
+          method: GET
+          path: ping
+
+# process SQS list of phone numbers and names, insert into dynamodb table (if not exist)
+  submitRegistration:
+    handler: src/lambdas/submit_registration.handler
+    events:
+      - sqs:
+          arn: !GetAtt RegistrationQueue.Arn
+          batchSize: 10
+          maximumBatchingWindow: 120
+
+# watch table stream, generate confirmation code and send sns to provided phone number
+  processRegistration:
+    handler: src/lambdas/process_registration.handler
+    events:
+      - stream:
+          type: dynamodb
+          arn: !GetAtt RegistrationTable.StreamArn
+
+# check if code exists, update registration if not expired
+  confirmRegistration:
+    handler: src/lambdas/confirm_registration.handler
+    events:
+      - sqs:
+          arn: !GetAtt ConfirmationQueue.Arn
+          batchSize: 10
+          maximumBatchingWindow: 120
+
+resources:
+  - ${file(./cfn-resources.yaml)}
